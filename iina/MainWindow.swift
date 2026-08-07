@@ -8,6 +8,10 @@
 
 import Cocoa
 
+extension Preference.Key {
+  static let legacyFullScreenExtendIntoCameraHousing = Preference.Key("legacyFullScreenExtendIntoCameraHousing")
+}
+
 class MainWindow: NSWindow {
   var forceKeyAndMain = false
 
@@ -60,6 +64,73 @@ class MainWindow: NSWindow {
 }
 
 class MainWindowContentView: NSView {
+  private var userDefaultsObserver: NSObjectProtocol?
+
+  deinit {
+    if let userDefaultsObserver {
+      NotificationCenter.default.removeObserver(userDefaultsObserver)
+    }
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+
+    guard userDefaultsObserver == nil else { return }
+    userDefaultsObserver = NotificationCenter.default.addObserver(
+      forName: UserDefaults.didChangeNotification,
+      object: UserDefaults.standard,
+      queue: .main
+    ) { [weak self] _ in
+      self?.updateLegacyFullScreenContentSize()
+    }
+  }
+
+  /// Keep the content view at the full display height when the user opts in to drawing around the camera housing.
+  /// `MainWindowController.setWindowFrameForLegacyFullScreen()` normally shortens the content view by
+  /// `NSScreen.cameraHousingHeight`; intercept only that resize and preserve all other window sizing behavior.
+  override func setFrameSize(_ newSize: NSSize) {
+    guard UserDefaults.standard.bool(forKey: Preference.Key.legacyFullScreenExtendIntoCameraHousing.rawValue),
+          let geometry = legacyFullScreenGeometry(),
+          abs(newSize.height - (geometry.screen.frame.height - geometry.housingHeight)) < 1 else {
+      super.setFrameSize(newSize)
+      return
+    }
+
+    super.setFrameSize(NSSize(width: newSize.width, height: geometry.screen.frame.height))
+  }
+
+  private func updateLegacyFullScreenContentSize() {
+    guard let geometry = legacyFullScreenGeometry() else { return }
+
+    let includeCameraHousing = UserDefaults.standard.bool(
+      forKey: Preference.Key.legacyFullScreenExtendIntoCameraHousing.rawValue
+    )
+    let height = includeCameraHousing
+      ? geometry.screen.frame.height
+      : geometry.screen.frame.height - geometry.housingHeight
+    super.setFrameSize(NSSize(width: geometry.screen.frame.width, height: height))
+  }
+
+  private func legacyFullScreenGeometry() -> (screen: NSScreen, housingHeight: CGFloat)? {
+    guard let window,
+          let controller = window.windowController as? MainWindowController,
+          isInOrEnteringLegacyFullScreen(controller),
+          let screen = window.screen,
+          let housingHeight = screen.cameraHousingHeight else { return nil }
+    return (screen, housingHeight)
+  }
+
+  private func isInOrEnteringLegacyFullScreen(_ controller: MainWindowController) -> Bool {
+    switch controller.fsState {
+    case let .fullscreen(legacy, _):
+      return legacy
+    case let .animating(toFullscreen, legacy, _):
+      return toFullscreen && legacy
+    case .windowed:
+      return false
+    }
+  }
+
   override func resetCursorRects() {
     guard let controller = window?.windowController as? MainWindowController else { return }
     for side in [SidebarController.Side.leading, .trailing] where controller.sidebars.sideBar(for: side).status != .hidden {
