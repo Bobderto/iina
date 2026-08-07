@@ -40,6 +40,53 @@ class PrefGeneralViewController: PreferenceViewController, PreferenceWindowEmbed
     
     afterOpenActionBox.heightAnchor.constraint(equalToConstant: 42).isActive = true
     pauseActionBox.heightAnchor.constraint(equalToConstant: 146).isActive = true
+    addCameraHousingFullScreenOption()
+  }
+
+  private func addCameraHousingFullScreenOption() {
+    guard let legacyFullScreenButton = findControl(in: behaviorView, boundTo: Preference.Key.useLegacyFullScreen.rawValue) else {
+      return
+    }
+
+    let button = NSButton(
+      checkboxWithTitle: "Fill screen around camera housing",
+      target: nil,
+      action: nil
+    )
+    button.translatesAutoresizingMaskIntoConstraints = false
+    button.controlSize = legacyFullScreenButton.controlSize
+    button.bind(
+      .value,
+      to: UserDefaults.standard,
+      withKeyPath: Preference.Key.legacyFullScreenExtendIntoCameraHousing.rawValue
+    )
+    button.bind(
+      .enabled,
+      to: UserDefaults.standard,
+      withKeyPath: Preference.Key.useLegacyFullScreen.rawValue
+    )
+
+    behaviorView.addSubview(button)
+    NSLayoutConstraint.activate([
+      button.leadingAnchor.constraint(equalTo: legacyFullScreenButton.trailingAnchor, constant: 12),
+      button.centerYAnchor.constraint(equalTo: legacyFullScreenButton.centerYAnchor),
+      button.trailingAnchor.constraint(lessThanOrEqualTo: behaviorView.trailingAnchor, constant: -8)
+    ])
+  }
+
+  private func findControl(in view: NSView, boundTo keyPath: String) -> NSControl? {
+    if let control = view as? NSControl,
+       let bindingInfo = control.infoForBinding(.value),
+       bindingInfo[.observedKeyPath] as? String == "values.\(keyPath)" {
+      return control
+    }
+
+    for subview in view.subviews {
+      if let control = findControl(in: subview, boundTo: keyPath) {
+        return control
+      }
+    }
+    return nil
   }
   
   // MARK: - IBAction
