@@ -88,6 +88,10 @@ class SettingsPageGeneral: SettingsPage {
         SettingsItem.Switch()
           .image(name: ["arrow.up.left.and.arrow.down.right.rectangle", "rectangle.expand.diagonal"])
           .bindTo(.useLegacyFullScreen)
+          .withDetailView {
+            SettingsItem.Switch(title: .general("Fill screen around camera housing"))
+              .bindTo(.legacyFullScreenExtendIntoCameraHousing)
+          }
         SettingsItem.Switch()
           .image(name: "lock.display")
           .bindTo(.blackOutMonitor)
